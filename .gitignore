@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+.next/
+dist/
+build/
+
+# Prisma
+backend/node_modules/
+
+# Test / cache
+.pytest_cache/
+coverage/
+.turbo/
+
+# OS/editor
+.DS_Store
+*.log
+.vscode/
+.idea/
