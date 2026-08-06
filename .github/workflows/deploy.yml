@@ -1,0 +1,27 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-frontend:
+    name: Deploy frontend to Vercel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --cwd=frontend
+        # Requires VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID repo secrets.
+
+  deploy-backend:
+    name: Deploy backend + ml-service to Render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trigger Render deploy hook (backend)
+        run: curl -fsSL "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
+      - name: Trigger Render deploy hook (ml-service)
+        run: curl -fsSL "${{ secrets.RENDER_ML_DEPLOY_HOOK }}"
+        # Both hooks are configured in Render's dashboard per-service and
+        # stored as repo secrets — no long-lived cloud credentials needed here.
