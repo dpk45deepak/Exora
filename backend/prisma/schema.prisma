@@ -1,0 +1,112 @@
+// Cryptographic Exam Proctoring & Behavioral Integrity Auditor
+// Database schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+enum SessionStatus {
+  PENDING
+  ACTIVE
+  SUBMITTED
+  FLAGGED
+  CLOSED
+}
+
+enum EventKind {
+  TELEMETRY_BATCH
+  FOCUS_LOSS
+  PASTE
+  COPY
+  ANOMALY_SCORE
+  SESSION_START
+  SESSION_END
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  role         UserRole
+  createdAt    DateTime  @default(now())
+
+  examSessions ExamSession[] @relation("StudentSessions")
+}
+
+model ExamSession {
+  id           String        @id @default(uuid())
+  studentId    String
+  student      User          @relation("StudentSessions", fields: [studentId], references: [id])
+  examTitle    String
+  status       SessionStatus @default(PENDING)
+  startedAt    DateTime?
+  submittedAt  DateTime?
+  createdAt    DateTime      @default(now())
+
+  events        AuditEvent[]
+  ledgerBlocks  LedgerBlock[]
+  baseline      BiometricBaseline?
+
+  @@index([studentId])
+  @@index([status])
+}
+
+/// Raw, append-only record of every telemetry/behavioral event received
+/// for a session. This is the pre-hash source of truth; LedgerBlock is the
+/// tamper-evident commitment built on top of it.
+model AuditEvent {
+  id            String      @id @default(uuid())
+  sessionId     String
+  session       ExamSession @relation(fields: [sessionId], references: [id])
+  kind          EventKind
+  payload       Json
+  anomalyScore  Float?
+  isAnomaly     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+
+  ledgerBlock   LedgerBlock?
+
+  @@index([sessionId, createdAt])
+}
+
+/// One hash-chained block per AuditEvent. previousHash of block N must equal
+/// hash of block N-1 (or GENESIS_HASH for the first block in a session) —
+/// this is what the dashboard's "Verify integrity" button re-derives.
+model LedgerBlock {
+  id            String      @id @default(uuid())
+  sessionId     String
+  session       ExamSession @relation(fields: [sessionId], references: [id])
+  eventId       String      @unique
+  event         AuditEvent  @relation(fields: [eventId], references: [id])
+  sequence      Int
+  previousHash  String
+  hash          String
+  createdAt     DateTime    @default(now())
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId])
+}
+
+/// Per-student trained autoencoder baseline metadata (weights live in the
+/// ML service's model store; this row tracks training status + threshold).
+model BiometricBaseline {
+  id             String      @id @default(uuid())
+  sessionId      String      @unique
+  session        ExamSession @relation(fields: [sessionId], references: [id])
+  isTrained      Boolean     @default(false)
+  sampleCount    Int         @default(0)
+  threshold      Float?
+  trainedAt      DateTime?
+  updatedAt      DateTime    @updatedAt
+}
